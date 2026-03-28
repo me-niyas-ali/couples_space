@@ -98,7 +98,7 @@ button {
 </div>
 
 <script type="module">
-
+import { orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth,
@@ -285,7 +285,11 @@ function openChat() {
   chatId = [currentUser.uid, partnerId].sort().join("_");
   show("chat");
 
-  const q = query(collection(db, "messages"), where("chatId", "==", chatId));
+  const q = query(
+  collection(db, "messages"),
+  where("chatId", "==", chatId),
+  orderBy("createdAt", "asc")
+);
 
   onSnapshot(q, (snap) => {
     chatBox.innerHTML = "";
