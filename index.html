@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Couples Space</title>
+
+<style>
+body { font-family: Arial; margin: 0; background: #f5f5f5; }
+
+.hidden { display: none; }
+
+.auth, .connect, .chat {
+  text-align: center;
+  padding: 20px;
+}
+
+input {
+  padding: 10px;
+  margin: 5px;
+  width: 250px;
+}
+
+button {
+  padding: 10px;
+  margin: 5px;
+  cursor: pointer;
+}
+
+.chatBox {
+  height: 60vh;
+  overflow-y: auto;
+  background: white;
+  margin: 10px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.msg {
+  padding: 8px;
+  margin: 5px;
+  border-radius: 8px;
+  max-width: 60%;
+}
+
+.me {
+  background: #DCF8C6;
+  margin-left: auto;
+  text-align: right;
+}
+
+.partner {
+  background: #eee;
+}
+</style>
+</head>
+
+<body>
+
+<!-- AUTH -->
+<div id="auth" class="auth">
+  <h2>Couples Space 💙</h2>
+
+  <input id="email" placeholder="Email"><br>
+  <input id="password" type="password" placeholder="Password"><br>
+
+  <button onclick="signup()">Signup</button>
+  <button onclick="login()">Login</button>
+
+  <p id="authMsg"></p>
+</div>
+
+<!-- CONNECT -->
+<div id="connect" class="connect hidden">
+  <h2>Connect Partner 💞</h2>
+
+  <p id="userEmail"></p>
+
+  <input id="searchEmail" placeholder="Partner email"><br>
+  <button onclick="searchUser()">Search</button>
+
+  <div id="searchResult"></div>
+
+  <button onclick="logout()">Logout</button>
+</div>
+
+<!-- CHAT -->
+<div id="chat" class="chat hidden">
+  <h3>💙 Chat</h3>
+
+  <div id="chatBox" class="chatBox"></div>
+
+  <input id="msg" placeholder="Message">
+  <button onclick="sendMsg()">Send</button>
+  
+
+  <button onclick="logout()">Logout</button>
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBI_v33PmZudLCLSfodsmOn5RMJPBiuA6k",
+  authDomain: "couples-space.firebaseapp.com",
+  projectId: "couples-space",
+  storageBucket: "couples-space.firebasestorage.app",
+  messagingSenderId: "133728082063",
+  appId: "1:133728082063:web:b01feb3bf4242bb20cb8fa"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let currentUser = null;
+let partnerId = null;
+let chatId = null;
+
+/* ---------------- SAFE UI SWITCH ---------------- */
+function show(id) {
+  document.getElementById("auth").classList.add("hidden");
+  document.getElementById("connect").classList.add("hidden");
+  document.getElementById("chat").classList.add("hidden");
+
+  document.getElementById(id).classList.remove("hidden");
+}
+
+/* ---------------- NAV LOGIC ---------------- */
+async function goToNextScreen(user) {
+  currentUser = user;
+
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      email: user.email,
+      partner: null
+    });
+  }
+
+  const data = (await getDoc(ref)).data();
+
+  document.getElementById("userEmail").innerText = user.email;
+
+  if (data.partner) {
+    partnerId = data.partner;
+    openChat();
+  } else {
+    show("connect");
+  }
+}
+
+/* ---------------- AUTH STATE ---------------- */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    currentUser = null;
+    show("auth");
+    return;
+  }
+
+  await goToNextScreen(user);
+});
+
+/* ---------------- SIGNUP ---------------- */
+window.signup = async () => {
+  try {
+    authMsg.innerText = "Creating account...";
+
+    const cred = await createUserWithEmailAndPassword(
+      auth,
+      email.value.trim(),
+      password.value
+    );
+
+    await setDoc(doc(db, "users", cred.user.uid), {
+      email: cred.user.email,
+      partner: null
+    });
+
+    authMsg.innerText = "Signup success ✅";
+
+  } catch (e) {
+    console.error(e);
+    authMsg.innerText = e.message;
+  }
+};
+
+/* ---------------- LOGIN FIXED ---------------- */
+window.login = async () => {
+  try {
+    authMsg.innerText = "Logging in...";
+
+    const cred = await signInWithEmailAndPassword(
+      auth,
+      email.value.trim(),
+      password.value
+    );
+
+    authMsg.innerText = "Login success 🎉";
+
+    await goToNextScreen(cred.user);
+
+  } catch (e) {
+    console.error(e);
+    authMsg.innerText = e.message;
+  }
+};
+
+/* ---------------- LOGOUT ---------------- */
+window.logout = async () => {
+  await signOut(auth);
+};
+
+/* ---------------- SEARCH USER ---------------- */
+window.searchUser = async () => {
+  try {
+    const q = query(
+      collection(db, "users"),
+      where("email", "==", searchEmail.value.trim())
+    );
+
+    const snap = await getDocs(q);
+
+    searchResult.innerHTML = "";
+
+    if (snap.empty) {
+      searchResult.innerText = "User not found";
+      return;
+    }
+
+    snap.forEach(d => {
+      if (d.id === currentUser.uid) return;
+
+      searchResult.innerHTML = `
+        ${d.data().email}<br>
+        <button onclick="connect('${d.id}')">Connect</button>
+      `;
+    });
+
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+/* ---------------- CONNECT ---------------- */
+window.connect = async (uid) => {
+  await updateDoc(doc(db, "users", currentUser.uid), {
+    partner: uid
+  });
+
+  await updateDoc(doc(db, "users", uid), {
+    partner: currentUser.uid
+  });
+
+  partnerId = uid;
+  openChat();
+};
+
+/* ---------------- CHAT ---------------- */
+function openChat() {
+  chatId = [currentUser.uid, partnerId].sort().join("_");
+  show("chat");
+
+  const q = query(collection(db, "messages"), where("chatId", "==", chatId));
+
+  onSnapshot(q, (snap) => {
+    chatBox.innerHTML = "";
+
+    snap.forEach(d => {
+      const m = d.data();
+
+      chatBox.innerHTML += `
+        <div class="msg ${m.senderId === currentUser.uid ? 'me' : 'partner'}">
+          ${m.text}
+        </div>
+      `;
+    });
+
+    chatBox.scrollTop = chatBox.scrollHeight;
+  });
+}
+
+/* ---------------- SEND MESSAGE ---------------- */
+window.sendMsg = async () => {
+  if (!msg.value.trim()) return;
+
+  await addDoc(collection(db, "messages"), {
+    chatId,
+    senderId: currentUser.uid,
+    text: msg.value.trim(),
+    createdAt: Date.now()
+  });
+
+  msg.value = "";
+};
+
+</script>
+
+</body>
+</html>
