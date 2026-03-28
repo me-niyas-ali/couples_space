@@ -98,8 +98,7 @@ button {
 </div>
 
 <script type="module">
-import { orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth,
@@ -286,34 +285,20 @@ function openChat() {
   chatId = [currentUser.uid, partnerId].sort().join("_");
   show("chat");
 
-  const q = query(
-  collection(db, "messages"),
-  where("chatId", "==", chatId),
-  orderBy("createdAt", "asc")
-);
+  const q = query(collection(db, "messages"), where("chatId", "==", chatId));
 
   onSnapshot(q, (snap) => {
-  chatBox.innerHTML = "";
+    chatBox.innerHTML = "";
 
-  const messages = [];
+    snap.forEach(d => {
+      const m = d.data();
 
-  snap.forEach(d => {
-    messages.push(d.data());
-  });
-
-  // safety sort (VERY IMPORTANT)
-  messages.sort((a, b) => a.createdAt - b.createdAt);
-
-  messages.forEach(m => {
-    chatBox.innerHTML += `
-      <div class="msg ${m.senderId === currentUser.uid ? 'me' : 'partner'}">
-        ${m.text}
-      </div>
-    `;
-  });
-
-  chatBox.scrollTop = chatBox.scrollHeight;
-});
+      chatBox.innerHTML += `
+        <div class="msg ${m.senderId === currentUser.uid ? 'me' : 'partner'}">
+          ${m.text}
+        </div>
+      `;
+    });
 
     chatBox.scrollTop = chatBox.scrollHeight;
   });
@@ -327,7 +312,7 @@ window.sendMsg = async () => {
     chatId,
     senderId: currentUser.uid,
     text: msg.value.trim(),
-    createdAt: serverTimestamp()
+    createdAt: Date.now()
   });
 
   msg.value = "";
