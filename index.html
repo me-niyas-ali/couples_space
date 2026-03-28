@@ -38,9 +38,10 @@ button {
 
 .msg {
   padding: 8px;
-  margin: 5px;
-  border-radius: 8px;
+  margin: 6px;
+  border-radius: 10px;
   max-width: 60%;
+  word-wrap: break-word;
 }
 
 .me {
@@ -51,6 +52,13 @@ button {
 
 .partner {
   background: #eee;
+}
+
+.dateSep {
+  text-align: center;
+  font-size: 12px;
+  margin: 10px 0;
+  color: #666;
 }
 </style>
 </head>
@@ -92,9 +100,6 @@ button {
 
   <input id="msg" placeholder="Message">
   <button onclick="sendMsg()">Send</button>
-  
-
-  <button onclick="logout()">Logout</button>
 </div>
 
 <script type="module">
@@ -139,7 +144,7 @@ let currentUser = null;
 let partnerId = null;
 let chatId = null;
 
-/* ---------------- SAFE UI SWITCH ---------------- */
+/* ---------------- UI SWITCH ---------------- */
 function show(id) {
   document.getElementById("auth").classList.add("hidden");
   document.getElementById("connect").classList.add("hidden");
@@ -148,7 +153,7 @@ function show(id) {
   document.getElementById(id).classList.remove("hidden");
 }
 
-/* ---------------- NAV LOGIC ---------------- */
+/* ---------------- NAV ---------------- */
 async function goToNextScreen(user) {
   currentUser = user;
 
@@ -204,12 +209,11 @@ window.signup = async () => {
     authMsg.innerText = "Signup success ✅";
 
   } catch (e) {
-    console.error(e);
     authMsg.innerText = e.message;
   }
 };
 
-/* ---------------- LOGIN FIXED ---------------- */
+/* ---------------- LOGIN ---------------- */
 window.login = async () => {
   try {
     authMsg.innerText = "Logging in...";
@@ -225,7 +229,6 @@ window.login = async () => {
     await goToNextScreen(cred.user);
 
   } catch (e) {
-    console.error(e);
     authMsg.innerText = e.message;
   }
 };
@@ -237,33 +240,28 @@ window.logout = async () => {
 
 /* ---------------- SEARCH USER ---------------- */
 window.searchUser = async () => {
-  try {
-    const q = query(
-      collection(db, "users"),
-      where("email", "==", searchEmail.value.trim())
-    );
+  const q = query(
+    collection(db, "users"),
+    where("email", "==", searchEmail.value.trim())
+  );
 
-    const snap = await getDocs(q);
+  const snap = await getDocs(q);
 
-    searchResult.innerHTML = "";
+  searchResult.innerHTML = "";
 
-    if (snap.empty) {
-      searchResult.innerText = "User not found";
-      return;
-    }
-
-    snap.forEach(d => {
-      if (d.id === currentUser.uid) return;
-
-      searchResult.innerHTML = `
-        ${d.data().email}<br>
-        <button onclick="connect('${d.id}')">Connect</button>
-      `;
-    });
-
-  } catch (e) {
-    console.error(e);
+  if (snap.empty) {
+    searchResult.innerText = "User not found";
+    return;
   }
+
+  snap.forEach(d => {
+    if (d.id === currentUser.uid) return;
+
+    searchResult.innerHTML = `
+      ${d.data().email}<br>
+      <button onclick="connect('${d.id}')">Connect</button>
+    `;
+  });
 };
 
 /* ---------------- CONNECT ---------------- */
@@ -280,6 +278,32 @@ window.connect = async (uid) => {
   openChat();
 };
 
+/* ---------------- TIME HELPERS ---------------- */
+function formatTime(ms) {
+  const d = new Date(ms);
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+
+  return `${h}:${m} ${ampm}`;
+}
+
+function formatDate(ms) {
+  const d = new Date(ms);
+  const today = new Date();
+
+  if (d.toDateString() === today.toDateString()) return "Today";
+
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+
+  return d.toDateString();
+}
+
 /* ---------------- CHAT ---------------- */
 function openChat() {
   chatId = [currentUser.uid, partnerId].sort().join("_");
@@ -288,14 +312,35 @@ function openChat() {
   const q = query(collection(db, "messages"), where("chatId", "==", chatId));
 
   onSnapshot(q, (snap) => {
+
+    let messages = [];
+
+    snap.forEach(d => messages.push(d.data()));
+
+    // SORT OLD → NEW
+    messages.sort((a, b) => a.createdAt - b.createdAt);
+
     chatBox.innerHTML = "";
 
-    snap.forEach(d => {
-      const m = d.data();
+    let lastDate = "";
+
+    messages.forEach(m => {
+
+      const dateLabel = formatDate(m.createdAt);
+
+      if (dateLabel !== lastDate) {
+        chatBox.innerHTML += `
+          <div class="dateSep">${dateLabel}</div>
+        `;
+        lastDate = dateLabel;
+      }
 
       chatBox.innerHTML += `
         <div class="msg ${m.senderId === currentUser.uid ? 'me' : 'partner'}">
           ${m.text}
+          <div style="font-size:10px; margin-top:4px; opacity:0.6;">
+            ${formatTime(m.createdAt)}
+          </div>
         </div>
       `;
     });
