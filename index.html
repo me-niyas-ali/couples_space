@@ -317,7 +317,7 @@ window.sendMsg = async () => {
     chatId,
     senderId: currentUser.uid,
     text: msg.value.trim(),
-    createdAt: Date.now()
+    createdAt: serverTimestamp()
   });
 
   msg.value = "";
