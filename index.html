@@ -293,17 +293,27 @@ function openChat() {
 );
 
   onSnapshot(q, (snap) => {
-    chatBox.innerHTML = "";
+  chatBox.innerHTML = "";
 
-    snap.forEach(d => {
-      const m = d.data();
+  const messages = [];
 
-      chatBox.innerHTML += `
-        <div class="msg ${m.senderId === currentUser.uid ? 'me' : 'partner'}">
-          ${m.text}
-        </div>
-      `;
-    });
+  snap.forEach(d => {
+    messages.push(d.data());
+  });
+
+  // safety sort (VERY IMPORTANT)
+  messages.sort((a, b) => a.createdAt - b.createdAt);
+
+  messages.forEach(m => {
+    chatBox.innerHTML += `
+      <div class="msg ${m.senderId === currentUser.uid ? 'me' : 'partner'}">
+        ${m.text}
+      </div>
+    `;
+  });
+
+  chatBox.scrollTop = chatBox.scrollHeight;
+});
 
     chatBox.scrollTop = chatBox.scrollHeight;
   });
